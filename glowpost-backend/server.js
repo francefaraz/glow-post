@@ -13,7 +13,7 @@ const generateRouter = require('./routes/generate');
 const app = express();
 app.use(cors());
 app.use(express.json());
-
+app.get('/', (req, res) => res.json({ message: 'GlowPost backend is running' }));
 app.use('/api/posts', postsRouter);
 app.use('/api/schedule', scheduleRouter);
 app.use('/api/brand', brandRouter);

@@ -1,12 +1,41 @@
 "use client"
 
 import { useState } from "react"
-import { Mail, MessageCircle, Send, Briefcase } from "lucide-react"
+import { Mail, MessageCircle, Send, Briefcase, Loader2 } from "lucide-react"
+import { contactApi } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function ContactPage() {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [message, setMessage] = useState("")
+  const [sending, setSending] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!name || !email || !message) {
+      toast.error("Please fill in all fields")
+      return
+    }
+
+    setSending(true)
+    try {
+      const response = await contactApi.submit({ name, email, message })
+      if (response.error) {
+        toast.error(response.error)
+      } else {
+        toast.success("Message sent successfully!")
+        setName("")
+        setEmail("")
+        setMessage("")
+      }
+    } catch (error) {
+      toast.error("Failed to send message")
+    } finally {
+      setSending(false)
+    }
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -19,7 +48,7 @@ export default function ContactPage() {
         {/* Contact Form */}
         <div className="neon-card">
           <h2 className="text-xl font-semibold mb-6">Send a Message</h2>
-          <div className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2 text-gray-300">Name</label>
               <input
@@ -28,6 +57,7 @@ export default function ContactPage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your name"
                 className="neon-input w-full"
+                required
               />
             </div>
             <div>
@@ -38,6 +68,7 @@ export default function ContactPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
                 className="neon-input w-full"
+                required
               />
             </div>
             <div>
@@ -48,13 +79,27 @@ export default function ContactPage() {
                 placeholder="Your message..."
                 rows={4}
                 className="neon-input w-full resize-none"
+                required
               />
             </div>
-            <button className="neon-button w-full flex items-center justify-center gap-2">
-              <Send className="w-5 h-5" />
-              Send Message
+            <button
+              type="submit"
+              disabled={sending}
+              className="neon-button w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sending ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="w-5 h-5" />
+                  Send Message
+                </>
+              )}
             </button>
-          </div>
+          </form>
         </div>
 
         {/* Contact Info */}

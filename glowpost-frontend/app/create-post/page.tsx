@@ -1,21 +1,69 @@
 "use client"
 
 import { useState } from "react"
-import { Sparkles, Save, Wand2 } from "lucide-react"
+import { Sparkles, Save, Wand2, Loader2 } from "lucide-react"
+import { generateApi, postsApi } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function CreatePostPage() {
   const [topic, setTopic] = useState("")
   const [keywords, setKeywords] = useState("")
   const [tone, setTone] = useState("Friendly")
   const [generatedContent, setGeneratedContent] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
-  const handleGenerate = () => {
-    setGeneratedContent(
-      `Here is your AI-generated post about "${topic || "your topic"}"!\n\n` +
-        `This is a placeholder for the generated content. When connected to the backend, ` +
-        `this will display real AI-generated content based on your topic, keywords, and selected tone.\n\n` +
-        `#${keywords?.split(",")[0]?.trim() || "trending"} #ContentCreator #SocialMedia`,
-    )
+  const handleGenerate = async () => {
+    if (!topic.trim()) {
+      toast.error("Please enter a topic")
+      return
+    }
+
+    setIsGenerating(true)
+    try {
+      const response = await generateApi.generate({ topic, tone, keywords })
+      if (response.error) {
+        toast.error(response.error)
+      } else if (response.data) {
+        setGeneratedContent(response.data.result)
+        toast.success("Content generated successfully!")
+      }
+    } catch (error) {
+      toast.error("Failed to generate content")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleSave = async () => {
+    if (!generatedContent.trim()) {
+      toast.error("Please generate content first")
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const response = await postsApi.create({
+        content: generatedContent,
+        topic,
+        tone,
+        keywords,
+      })
+      if (response.error) {
+        toast.error(response.error)
+      } else {
+        toast.success("Post saved successfully!")
+        // Reset form
+        setTopic("")
+        setKeywords("")
+        setTone("Friendly")
+        setGeneratedContent("")
+      }
+    } catch (error) {
+      toast.error("Failed to save post")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -64,13 +112,39 @@ export default function CreatePostPage() {
           </div>
 
           <div className="flex gap-4 pt-4">
-            <button onClick={handleGenerate} className="neon-button flex items-center gap-2 flex-1">
-              <Wand2 className="w-5 h-5" />
-              Generate Post
+            <button 
+              onClick={handleGenerate} 
+              disabled={isGenerating}
+              className="neon-button flex items-center gap-2 flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="w-5 h-5" />
+                  Generate Post
+                </>
+              )}
             </button>
-            <button className="neon-button-outline flex items-center gap-2">
-              <Save className="w-5 h-5" />
-              Save Post
+            <button 
+              onClick={handleSave}
+              disabled={isSaving || !generatedContent}
+              className="neon-button-outline flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-5 h-5" />
+                  Save Post
+                </>
+              )}
             </button>
           </div>
         </div>

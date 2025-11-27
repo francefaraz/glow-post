@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { Navbar } from "@/components/navbar"
 import { MobileBottomNav } from "@/components/mobile-bottom-nav"
+import { Toaster } from "@/components/ui/sonner"
 
 const _inter = Inter({ subsets: ["latin"] })
 
@@ -42,6 +43,7 @@ export default function RootLayout({
         <Navbar />
         <main className="pt-20 pb-20 md:pb-0 min-h-screen">{children}</main>
         <MobileBottomNav />
+        <Toaster />
         <Analytics />
       </body>
     </html>

@@ -1,14 +1,74 @@
 "use client"
 
-import { useState } from "react"
-import { ChevronLeft, ChevronRight, X } from "lucide-react"
+import { useState, useEffect } from "react"
+import { ChevronLeft, ChevronRight, X, Loader2 } from "lucide-react"
+import { scheduleApi } from "@/lib/api"
+import { toast } from "sonner"
 
-const scheduledDates = [3, 8, 12, 15, 22, 28]
+interface Schedule {
+  id: number
+  post_id: number
+  scheduled_time: string
+  platform?: string
+  post?: {
+    id: number
+    content: string
+    topic?: string
+  }
+}
 
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<number | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchSchedules()
+  }, [])
+
+  const fetchSchedules = async () => {
+    setLoading(true)
+    try {
+      const response = await scheduleApi.getAll()
+      if (response.error) {
+        toast.error(response.error)
+      } else if (response.data) {
+        setSchedules(response.data)
+      }
+    } catch (error) {
+      toast.error("Failed to fetch schedules")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getScheduledDates = () => {
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+    return schedules
+      .filter((schedule) => {
+        const scheduleDate = new Date(schedule.scheduled_time)
+        return scheduleDate.getFullYear() === year && scheduleDate.getMonth() === month
+      })
+      .map((schedule) => new Date(schedule.scheduled_time).getDate())
+  }
+
+  const getSchedulesForDate = (day: number) => {
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+    return schedules.filter((schedule) => {
+      const scheduleDate = new Date(schedule.scheduled_time)
+      return (
+        scheduleDate.getFullYear() === year &&
+        scheduleDate.getMonth() === month &&
+        scheduleDate.getDate() === day
+      )
+    })
+  }
+
+  const scheduledDates = getScheduledDates()
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -66,6 +126,16 @@ export default function CalendarPage() {
     )
   }
 
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="w-8 h-8 animate-spin text-[#A855F7]" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="mb-8">
@@ -101,7 +171,7 @@ export default function CalendarPage() {
       </div>
 
       {/* Modal */}
-      {showModal && (
+      {showModal && selectedDate !== null && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="neon-card max-w-md w-full relative neon-glow-purple">
             <button
@@ -110,17 +180,43 @@ export default function CalendarPage() {
             >
               <X className="w-5 h-5 text-gray-400" />
             </button>
-            <h3 className="text-xl font-semibold mb-2">
+            <h3 className="text-xl font-semibold mb-4">
               {monthNames[month]} {selectedDate}, {year}
             </h3>
-            <p className="text-gray-400">
-              {scheduledDates.includes(selectedDate!)
-                ? "You have scheduled posts for this day."
-                : "No scheduled posts for this day."}
-            </p>
-            <p className="text-sm text-gray-500 mt-4">
-              Scheduled posts will appear here when connected to the backend.
-            </p>
+            {(() => {
+              const daySchedules = getSchedulesForDate(selectedDate)
+              if (daySchedules.length === 0) {
+                return <p className="text-gray-400">No scheduled posts for this day.</p>
+              }
+              return (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-400 mb-3">
+                    {daySchedules.length} scheduled post{daySchedules.length > 1 ? "s" : ""}
+                  </p>
+                  {daySchedules.map((schedule) => {
+                    const scheduleDate = new Date(schedule.scheduled_time)
+                    return (
+                      <div key={schedule.id} className="border border-[#A855F7]/30 rounded-lg p-3">
+                        <p className="font-medium text-sm mb-1">
+                          {schedule.post?.topic || `Post #${schedule.post_id}`}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {scheduleDate.toLocaleTimeString("en-US", {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                        {schedule.post?.content && (
+                          <p className="text-xs text-gray-500 mt-2 line-clamp-2">
+                            {schedule.post.content}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
           </div>
         </div>
       )}

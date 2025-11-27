@@ -1,19 +1,116 @@
 "use client"
 
-import { useState } from "react"
-import { Clock, CalendarDays, Save } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Clock, CalendarDays, Save, Loader2, Trash2 } from "lucide-react"
+import { postsApi, scheduleApi } from "@/lib/api"
+import { toast } from "sonner"
 
-const mockPosts = [
-  { id: 1, title: "Summer Sale Announcement" },
-  { id: 2, title: "New Product Launch" },
-  { id: 3, title: "Weekly Tips & Tricks" },
-  { id: 4, title: "Behind the Scenes" },
-]
+interface Post {
+  id: number
+  content: string
+  topic?: string
+}
+
+interface Schedule {
+  id: number
+  post_id: number
+  scheduled_time: string
+  platform?: string
+  post?: Post
+}
 
 export default function SchedulerPage() {
+  const [posts, setPosts] = useState<Post[]>([])
+  const [schedules, setSchedules] = useState<Schedule[]>([])
   const [selectedPost, setSelectedPost] = useState("")
   const [date, setDate] = useState("")
   const [time, setTime] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    setLoading(true)
+    try {
+      const [postsResponse, schedulesResponse] = await Promise.all([
+        postsApi.getAll(),
+        scheduleApi.getAll(),
+      ])
+
+      if (postsResponse.data) setPosts(postsResponse.data)
+      if (schedulesResponse.data) setSchedules(schedulesResponse.data)
+    } catch (error) {
+      toast.error("Failed to load data")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    if (!selectedPost || !date || !time) {
+      toast.error("Please fill in all fields")
+      return
+    }
+
+    const scheduledTime = new Date(`${date}T${time}`).toISOString()
+    setSaving(true)
+    try {
+      const response = await scheduleApi.create({
+        post_id: parseInt(selectedPost),
+        scheduled_time: scheduledTime,
+      })
+      if (response.error) {
+        toast.error(response.error)
+      } else {
+        toast.success("Schedule created successfully!")
+        setSelectedPost("")
+        setDate("")
+        setTime("")
+        fetchData()
+      }
+    } catch (error) {
+      toast.error("Failed to create schedule")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this schedule?")) return
+
+    try {
+      const response = await scheduleApi.delete(id)
+      if (response.error) {
+        toast.error(response.error)
+      } else {
+        toast.success("Schedule deleted successfully")
+        fetchData()
+      }
+    } catch (error) {
+      toast.error("Failed to delete schedule")
+    }
+  }
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return {
+      date: date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      time: date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="w-8 h-8 animate-spin text-[#3B82F6]" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -34,9 +131,9 @@ export default function SchedulerPage() {
             className="neon-input w-full cursor-pointer"
           >
             <option value="">Choose a saved post...</option>
-            {mockPosts.map((post) => (
+            {posts.map((post) => (
               <option key={post.id} value={post.id}>
-                {post.title}
+                {post.topic || `Post #${post.id}`}
               </option>
             ))}
           </select>
@@ -70,31 +167,57 @@ export default function SchedulerPage() {
           </div>
         </div>
 
-        <button className="neon-button w-full flex items-center justify-center gap-2 mt-6">
-          <Save className="w-5 h-5" />
-          Save Schedule
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="neon-button w-full flex items-center justify-center gap-2 mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-5 h-5" />
+              Save Schedule
+            </>
+          )}
         </button>
       </div>
 
       {/* Upcoming Schedules Preview */}
       <div className="mt-8">
         <h3 className="text-lg font-semibold mb-4 text-gray-300">Upcoming Scheduled Posts</h3>
-        <div className="space-y-3">
-          {[
-            { title: "Summer Sale Announcement", date: "Nov 28, 2025", time: "10:00 AM" },
-            { title: "New Product Launch", date: "Nov 30, 2025", time: "2:00 PM" },
-          ].map((item, index) => (
-            <div key={index} className="neon-card flex items-center justify-between py-3">
-              <div>
-                <p className="font-medium">{item.title}</p>
-                <p className="text-sm text-gray-400">
-                  {item.date} at {item.time}
-                </p>
-              </div>
-              <div className="w-2 h-2 rounded-full bg-[#A855F7] neon-glow-purple" />
-            </div>
-          ))}
-        </div>
+        {schedules.length === 0 ? (
+          <p className="text-gray-400 text-center py-8">No scheduled posts yet</p>
+        ) : (
+          <div className="space-y-3">
+            {schedules.map((schedule) => {
+              const { date, time } = formatDateTime(schedule.scheduled_time)
+              const postTitle = schedule.post?.topic || `Post #${schedule.post_id}`
+              return (
+                <div key={schedule.id} className="neon-card flex items-center justify-between py-3">
+                  <div className="flex-1">
+                    <p className="font-medium">{postTitle}</p>
+                    <p className="text-sm text-gray-400">
+                      {date} at {time}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-[#A855F7] neon-glow-purple" />
+                    <button
+                      onClick={() => handleDelete(schedule.id)}
+                      className="p-2 rounded-lg hover:bg-red-500/20 transition-colors group"
+                    >
+                      <Trash2 className="w-4 h-4 text-gray-400 group-hover:text-red-500" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
